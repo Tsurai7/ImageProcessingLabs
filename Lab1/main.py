@@ -1,5 +1,6 @@
 import argparse
 import os
+import time
 from typing import Tuple, Optional
 from pathlib import Path
 
@@ -68,6 +69,9 @@ def main() -> None:
     parser.add_argument('--sigma', type=float, default=1.5, help='Sigma для Гаусса')
     parser.add_argument('--thr', type=int, default=30, help='Порог бинаризации')
     parser.add_argument('--shape', type=str, choices=['circle', 'square', 'diamond'], default='circle', help='Фигура для синтетики')
+    parser.add_argument('--fast', action='store_true', default=True, help='Использовать быстрые алгоритмы (по умолчанию)')
+    parser.add_argument('--slow', action='store_true', help='Использовать медленные алгоритмы для сравнения')
+    parser.add_argument('--benchmark', action='store_true', help='Запустить бенчмарк обеих версий')
 
     args = parser.parse_args()
     ensure_dir(args.outdir)
@@ -93,19 +97,53 @@ def main() -> None:
         synth_path = os.path.join(args.outdir, 'synthetic_input.png')
         Image.fromarray(img_rgb).save(synth_path)
 
-    # Вариант А (авторский)
-    prop = run_pipeline_proprietary(img_rgb, kernel_size=args.kernel, sigma=args.sigma, threshold=args.thr)
+    # Определение режима скорости
+    use_fast = args.fast and not args.slow
+
+    if args.benchmark:
+        # Бенчмарк: сравниваем быструю и медленную версии
+        print("Запуск бенчмарка...")
+        
+        # Медленная версия (А)
+        start = time.time()
+        prop_slow = run_pipeline_proprietary(img_rgb, kernel_size=args.kernel, sigma=args.sigma, threshold=args.thr, fast=False)
+        time_slow = time.time() - start
+        
+        # Быстрая версия (А)
+        start = time.time()
+        prop_fast = run_pipeline_proprietary(img_rgb, kernel_size=args.kernel, sigma=args.sigma, threshold=args.thr, fast=True)
+        time_fast = time.time() - start
+        
+        # OpenCV версия (B)
+        start = time.time()
+        lib = run_pipeline_library(img_rgb, kernel_size=args.kernel, sigma=args.sigma, threshold=args.thr)
+        time_lib = time.time() - start
+        
+        print(f"Время выполнения:")
+        print(f"  Авторская (медленная): {time_slow:.3f}с")
+        print(f"  Авторская (быстрая):   {time_fast:.3f}с")
+        print(f"  OpenCV:                {time_lib:.3f}с")
+        print(f"  Ускорение (быстрая):   {time_slow/time_fast:.1f}x")
+        print(f"  OpenCV vs быстрая:     {time_lib/time_fast:.1f}x")
+        
+        # Сохраняем результаты быстрой версии
+        prop = prop_fast
+    else:
+        # Обычный режим
+        prop = run_pipeline_proprietary(img_rgb, kernel_size=args.kernel, sigma=args.sigma, threshold=args.thr, fast=use_fast)
+        lib = run_pipeline_library(img_rgb, kernel_size=args.kernel, sigma=args.sigma, threshold=args.thr)
+
+    # Сохранение результатов
     save_image_gray(prop['gray'], os.path.join(args.outdir, 'A_gray.png'))
     save_image_gray(prop['blurred'], os.path.join(args.outdir, 'A_blur.png'))
     save_image_gray(prop['edges'], os.path.join(args.outdir, 'A_edges.png'))
     save_image_gray(prop['binary'], os.path.join(args.outdir, 'A_binary.png'))
 
-    # Вариант B (библиотека OpenCV)
-    lib = run_pipeline_library(img_rgb, kernel_size=args.kernel, sigma=args.sigma, threshold=args.thr)
-    save_image_gray(lib['gray'], os.path.join(args.outdir, 'B_gray.png'))
-    save_image_gray(lib['blurred'], os.path.join(args.outdir, 'B_blur.png'))
-    save_image_gray(lib['edges'], os.path.join(args.outdir, 'B_edges.png'))
-    save_image_gray(lib['binary'], os.path.join(args.outdir, 'B_binary.png'))
+    if not args.benchmark:
+        save_image_gray(lib['gray'], os.path.join(args.outdir, 'B_gray.png'))
+        save_image_gray(lib['blurred'], os.path.join(args.outdir, 'B_blur.png'))
+        save_image_gray(lib['edges'], os.path.join(args.outdir, 'B_edges.png'))
+        save_image_gray(lib['binary'], os.path.join(args.outdir, 'B_binary.png'))
 
     # Сохранить исходник
     Image.fromarray(img_rgb).save(os.path.join(args.outdir, 'input_rgb.png'))
