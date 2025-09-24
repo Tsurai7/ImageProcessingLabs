@@ -1,27 +1,10 @@
 import os
+from utils import save_step
 from typing import List, Tuple
 import matplotlib.pyplot as plt
 from numpy.lib.stride_tricks import sliding_window_view
 
 import numpy as np
-
-
-def ensure_dir(path: str) -> None:
-    if not os.path.exists(path):
-        os.makedirs(path, exist_ok=True)
-
-
-def save_step(img: np.ndarray, name: str, variant: str, base_dir: str) -> None:
-    folder = os.path.join(base_dir, f"variant_{variant}")
-    ensure_dir(folder)
-    path = os.path.join(folder, f"{name}.png")
-    if img.dtype == bool:
-        plt.imsave(path, img.astype(np.uint8) * 255, cmap="gray")
-    elif img.ndim == 2:
-        plt.imsave(path, img.astype(np.uint8), cmap="gray")
-    else:
-        plt.imsave(path, img.astype(np.uint8))
-
 
 def convolve2d_fast(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     kh, kw = kernel.shape
@@ -126,14 +109,12 @@ def find_top_components(mask: np.ndarray, top_n: int = 6, connectivity8: bool = 
 
 
 def compute_blue_ratio(image: np.ndarray) -> np.ndarray:
-    """Вычисляет признак blue-ratio в диапазоне [0, 255]."""
     denom = image[:, :, 0].astype(float) + image[:, :, 1].astype(float) + image[:, :, 2].astype(float) + 1e-5
     blue_ratio = image[:, :, 2].astype(float) / denom
     return (blue_ratio * 255.0)
 
 
 def apply_open_close(mask: np.ndarray, open_size: int = 3, close_size: int = 7) -> np.ndarray:
-    """Применяет морфологическое открытие (эрозия→диляция) и закрытие (диляция→эрозия)."""
     out = binary_erosion_fast(mask, size=open_size)
     out = binary_dilation_fast(out, size=open_size)
     out = binary_dilation_fast(out, size=close_size)
@@ -142,16 +123,10 @@ def apply_open_close(mask: np.ndarray, open_size: int = 3, close_size: int = 7) 
 
 
 def fill_holes(mask: np.ndarray) -> np.ndarray:
-    """Заполняет отверстия внутри маски (если есть SciPy – используем, иначе возвращаем как есть)."""
-    try:
-        from scipy.ndimage import binary_fill_holes
-        return binary_fill_holes(mask)
-    except Exception:
-        return mask
+    return mask
 
 
 def overlay_edges(rgb: np.ndarray, mask: np.ndarray, edge_threshold: int = 30) -> Tuple[np.ndarray, np.ndarray]:
-    """Строит границы по Собелю на сером изображении, применяет порог и наносит на RGB."""
     gray = np.dot(rgb.astype(float), [0.299, 0.587, 0.114])
     edges = sobel_edges(gray * mask)
     edges_high = edges > edge_threshold

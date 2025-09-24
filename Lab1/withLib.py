@@ -1,23 +1,7 @@
 import os
+from utils import save_step
+from scipy.ndimage import gaussian_filter, binary_opening, binary_closing, label, binary_fill_holes, convolve
 import numpy as np
-
-
-def ensure_dir(path: str) -> None:
-    if not os.path.exists(path):
-        os.makedirs(path, exist_ok=True)
-
-
-def save_step(img: np.ndarray, name: str, variant: str, base_dir: str) -> None:
-    import matplotlib.pyplot as plt
-    folder = os.path.join(base_dir, f"variant_{variant}")
-    ensure_dir(folder)
-    path = os.path.join(folder, f"{name}.png")
-    if img.dtype == bool:
-        plt.imsave(path, img.astype(np.uint8) * 255, cmap="gray")
-    elif img.ndim == 2:
-        plt.imsave(path, img.astype(np.uint8), cmap="gray")
-    else:
-        plt.imsave(path, img.astype(np.uint8))
 
 
 def otsu_threshold(img: np.ndarray) -> int:
@@ -47,8 +31,6 @@ def otsu_threshold(img: np.ndarray) -> int:
 
 
 def scki_kit_impl(image: np.ndarray, sigma: float = 1.5, outdir: str = "."):
-    from scipy.ndimage import gaussian_filter, binary_opening, binary_closing, label, binary_fill_holes, convolve
-
     denom = image[:, :, 0].astype(float) + image[:, :, 1].astype(float) + image[:, :, 2].astype(float) + 1e-5
     blue_ratio = image[:, :, 2].astype(float) / denom
     blue_ratio *= 255.0

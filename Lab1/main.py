@@ -5,13 +5,9 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
+from utils import ensure_dir
 from proprietary import proprietary_impl
 from withLib import scki_kit_impl
-
-
-def ensure_dir(path: str) -> None:
-    if not os.path.exists(path):
-        os.makedirs(path, exist_ok=True)
 
 
 def load_image(path: str) -> np.ndarray:
