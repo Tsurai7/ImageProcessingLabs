@@ -1,5 +1,7 @@
 import os
 from typing import List, Tuple
+import matplotlib.pyplot as plt
+from numpy.lib.stride_tricks import sliding_window_view
 
 import numpy as np
 
@@ -10,8 +12,7 @@ def ensure_dir(path: str) -> None:
 
 
 def save_step(img: np.ndarray, name: str, variant: str, base_dir: str) -> None:
-    import matplotlib.pyplot as plt
-    folder = os.path.join(base_dir, f"steps_{variant}")
+    folder = os.path.join(base_dir, f"variant_{variant}")
     ensure_dir(folder)
     path = os.path.join(folder, f"{name}.png")
     if img.dtype == bool:
@@ -23,20 +24,14 @@ def save_step(img: np.ndarray, name: str, variant: str, base_dir: str) -> None:
 
 
 def convolve2d_fast(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
-    try:
-        from scipy.signal import convolve2d
-        return convolve2d(image, kernel, mode='same', boundary='symm')
-    except Exception:
-        from numpy.lib.stride_tricks import sliding_window_view
-        kh, kw = kernel.shape
-        pad_h, pad_w = kh // 2, kw // 2
-        padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='edge')
-        windows = sliding_window_view(padded, (kh, kw))
-        return np.sum(windows * kernel, axis=(2, 3))
+    kh, kw = kernel.shape
+    pad_h, pad_w = kh // 2, kw // 2
+    padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='edge')
+    windows = sliding_window_view(padded, (kh, kw))
+    return np.sum(windows * kernel, axis=(2, 3))
 
 
 def binary_erosion_fast(mask: np.ndarray, size: int = 3) -> np.ndarray:
-    from numpy.lib.stride_tricks import sliding_window_view
     kernel = (size, size)
     pad = size // 2
     padded = np.pad(mask.astype(np.uint8) * 255, pad, mode='edge')
@@ -46,7 +41,6 @@ def binary_erosion_fast(mask: np.ndarray, size: int = 3) -> np.ndarray:
 
 
 def binary_dilation_fast(mask: np.ndarray, size: int = 3) -> np.ndarray:
-    from numpy.lib.stride_tricks import sliding_window_view
     kernel = (size, size)
     pad = size // 2
     padded = np.pad(mask.astype(np.uint8) * 255, pad, mode='edge')

@@ -9,7 +9,7 @@ def ensure_dir(path: str) -> None:
 
 def save_step(img: np.ndarray, name: str, variant: str, base_dir: str) -> None:
     import matplotlib.pyplot as plt
-    folder = os.path.join(base_dir, f"steps_{variant}")
+    folder = os.path.join(base_dir, f"variant_{variant}")
     ensure_dir(folder)
     path = os.path.join(folder, f"{name}.png")
     if img.dtype == bool:
