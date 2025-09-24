@@ -131,10 +131,43 @@ def find_top_components(mask: np.ndarray, top_n: int = 6, connectivity8: bool = 
     return out
 
 
-def variant_a(image: np.ndarray, gauss_size: int = 5, sigma: float = 1.5, outdir: str = "."):
+def compute_blue_ratio(image: np.ndarray) -> np.ndarray:
+    """Вычисляет признак blue-ratio в диапазоне [0, 255]."""
     denom = image[:, :, 0].astype(float) + image[:, :, 1].astype(float) + image[:, :, 2].astype(float) + 1e-5
     blue_ratio = image[:, :, 2].astype(float) / denom
-    blue_ratio *= 255.0
+    return (blue_ratio * 255.0)
+
+
+def apply_open_close(mask: np.ndarray, open_size: int = 3, close_size: int = 7) -> np.ndarray:
+    """Применяет морфологическое открытие (эрозия→диляция) и закрытие (диляция→эрозия)."""
+    out = binary_erosion_fast(mask, size=open_size)
+    out = binary_dilation_fast(out, size=open_size)
+    out = binary_dilation_fast(out, size=close_size)
+    out = binary_erosion_fast(out, size=close_size)
+    return out
+
+
+def fill_holes(mask: np.ndarray) -> np.ndarray:
+    """Заполняет отверстия внутри маски (если есть SciPy – используем, иначе возвращаем как есть)."""
+    try:
+        from scipy.ndimage import binary_fill_holes
+        return binary_fill_holes(mask)
+    except Exception:
+        return mask
+
+
+def overlay_edges(rgb: np.ndarray, mask: np.ndarray, edge_threshold: int = 30) -> Tuple[np.ndarray, np.ndarray]:
+    """Строит границы по Собелю на сером изображении, применяет порог и наносит на RGB."""
+    gray = np.dot(rgb.astype(float), [0.299, 0.587, 0.114])
+    edges = sobel_edges(gray * mask)
+    edges_high = edges > edge_threshold
+    result = rgb.copy()
+    result[edges_high] = [255, 0, 0]
+    return result, edges_high
+
+
+def proprietary_impl(image: np.ndarray, gauss_size: int = 5, sigma: float = 1.5, outdir: str = "."):
+    blue_ratio = compute_blue_ratio(image)
 
     k = gaussian_kernel(gauss_size, sigma)
     blurred = convolve2d_fast(blue_ratio, k)
@@ -144,34 +177,20 @@ def variant_a(image: np.ndarray, gauss_size: int = 5, sigma: float = 1.5, outdir
     mask = blurred > thr
     save_step(mask, "02_binarized", "A", outdir)
 
-    mask = binary_erosion_fast(mask, size=3)
-    mask = binary_dilation_fast(mask, size=3)
-    save_step(mask, "03_opening", "A", outdir)
-
-    mask = binary_dilation_fast(mask, size=7)
-    mask = binary_erosion_fast(mask, size=7)
-    save_step(mask, "04_closing", "A", outdir)
+    mask = apply_open_close(mask, open_size=3, close_size=7)
+    save_step(mask, "03_morphology", "A", outdir)
 
     mask = find_top_components(mask, top_n=6)
-    save_step(mask, "05_top_components", "A", outdir)
+    save_step(mask, "04_top_components", "A", outdir)
 
-    try:
-        from scipy.ndimage import binary_fill_holes
-        mask = binary_fill_holes(mask)
-    except Exception:
-        pass
-    save_step(mask, "06_filled", "A", outdir)
+    mask = fill_holes(mask)
+    save_step(mask, "05_filled", "A", outdir)
 
     masked_rgb = image.copy()
     masked_rgb[~mask] = 0
-    save_step(masked_rgb, "07_masked_image", "A", outdir)
+    save_step(masked_rgb, "06_masked_image", "A", outdir)
 
-    gray = np.dot(image.astype(float), [0.299, 0.587, 0.114])
-    edges = sobel_edges(gray * mask)
-    edges_high = edges > 30
-    save_step(edges_high, "08_edges", "A", outdir)
-
-    result = masked_rgb.copy()
-    result[edges_high] = [255, 0, 0]
-    save_step(result, "09_result", "A", outdir)
+    result, edges_high = overlay_edges(masked_rgb, mask, edge_threshold=30)
+    save_step(edges_high, "07_edges", "A", outdir)
+    save_step(result, "08_result", "A", outdir)
     return result, mask.astype(bool), edges_high

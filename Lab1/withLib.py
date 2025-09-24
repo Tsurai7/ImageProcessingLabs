@@ -1,6 +1,4 @@
 import os
-from typing import Tuple
-
 import numpy as np
 
 
@@ -22,25 +20,15 @@ def save_step(img: np.ndarray, name: str, variant: str, base_dir: str) -> None:
         plt.imsave(path, img.astype(np.uint8))
 
 
-def variant_b(image: np.ndarray, sigma: float = 1.5, outdir: str = "."):
-    from scipy.ndimage import gaussian_filter, binary_opening, binary_closing, label, binary_fill_holes, convolve
-    
-    denom = image[:, :, 0].astype(float) + image[:, :, 1].astype(float) + image[:, :, 2].astype(float) + 1e-5
-    blue_ratio = image[:, :, 2].astype(float) / denom
-    blue_ratio *= 255.0
-
-    blurred = gaussian_filter(blue_ratio, sigma=sigma)
-    save_step(blurred, "01_blurred", "B", outdir)
-
-    # Otsu
-    img8 = np.clip(blurred, 0, 255).astype(np.uint8)
+def otsu_threshold(img: np.ndarray) -> int:
+    img8 = np.clip(img, 0, 255).astype(np.uint8)
     hist = np.bincount(img8.ravel(), minlength=256).astype(float)
     total = img8.size
     sum_total = np.dot(np.arange(256), hist)
     sum_b = 0.0
     w_b = 0.0
     var_max = 0.0
-    thr = 0
+    threshold = 0
     for t in range(256):
         w_b += hist[t]
         if w_b == 0:
@@ -54,7 +42,21 @@ def variant_b(image: np.ndarray, sigma: float = 1.5, outdir: str = "."):
         var_between = w_b * w_f * (m_b - m_f) ** 2
         if var_between > var_max:
             var_max = var_between
-            thr = t
+            threshold = t
+    return threshold
+
+
+def scki_kit_impl(image: np.ndarray, sigma: float = 1.5, outdir: str = "."):
+    from scipy.ndimage import gaussian_filter, binary_opening, binary_closing, label, binary_fill_holes, convolve
+
+    denom = image[:, :, 0].astype(float) + image[:, :, 1].astype(float) + image[:, :, 2].astype(float) + 1e-5
+    blue_ratio = image[:, :, 2].astype(float) / denom
+    blue_ratio *= 255.0
+
+    blurred = gaussian_filter(blue_ratio, sigma=sigma)
+    save_step(blurred, "01_blurred", "B", outdir)
+
+    thr = otsu_threshold(blurred)
     mask = blurred > thr
     save_step(mask, "02_binarized", "B", outdir)
 
